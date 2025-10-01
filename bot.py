@@ -1,13 +1,13 @@
 import os
 import json
 import asyncio
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from detector import DojiDetector
 from datetime import datetime
 
-load_dotenv()
+#load_dotenv()
 
 # ========== FILE LƯU DANH SÁCH SYMBOLS ==========
 SYMBOLS_FILE = "symbols.json"
