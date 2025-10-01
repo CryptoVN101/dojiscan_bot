@@ -6,7 +6,7 @@ from sr_calculator import SupportResistanceCalculator
 
 # ========== CẤU HÌNH ==========
 # Danh sách các cặp coin cần backtest
-SYMBOLS = ["ZROUSDT", "EIGENUSDT"]
+SYMBOLS = ["COWUSDT"]
 
 # Khung thời gian
 TIMEFRAMES = ["1h", "4h", "1d"]

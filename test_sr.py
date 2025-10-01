@@ -9,7 +9,7 @@ def test_sr_zones():
     """Test S/R zones cho nhiều symbols và timeframes"""
     
     # Symbols để test
-    test_symbols = ["ZROUSDT"]
+    test_symbols = ["ARBUSDT"]
     timeframes = ["1h", "4h", "1d"]
     
     # Khởi tạo calculator
