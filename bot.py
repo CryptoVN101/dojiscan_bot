@@ -1,10 +1,13 @@
 import os
 import json
 import asyncio
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from detector import DojiDetector
 from datetime import datetime
+
+load_dotenv()
 
 # ========== FILE LƯU DANH SÁCH SYMBOLS ==========
 SYMBOLS_FILE = "symbols.json"
@@ -214,7 +217,8 @@ async def run_scanner(context: ContextTypes.DEFAULT_TYPE):
                     f"📊 <b>Symbol:</b> {signal['symbol']}\n"
                     f"⏰ <b>Khung thời gian:</b> {signal['timeframe']}\n"
                     f"🕐 <b>Thời gian đóng nến:</b> {signal['close_time']}\n"
-                    f"💰 <b>Giá đóng cửa:</b> ${signal['price']:.4f}"
+                    f"💰 <b>Giá đóng cửa:</b> ${signal['price']:.4f}\n\n"
+                    f"🎲 <b>Tín hiệu:</b> {signal['signal_type']}"
                 )
                 
                 try:
