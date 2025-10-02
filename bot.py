@@ -1,13 +1,10 @@
 import os
 import json
 import asyncio
-#from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from detector import DojiDetector
 from datetime import datetime
-
-#load_dotenv()
 
 # ========== FILE LƯU DANH SÁCH SYMBOLS ==========
 SYMBOLS_FILE = "symbols.json"
@@ -211,14 +208,21 @@ async def run_scanner(context: ContextTypes.DEFAULT_TYPE):
             
             # Gửi tín hiệu lên channel
             for signal in signals:
+                # Xác định emoji và text cho tín hiệu
+                if "LONG" in signal['signal_type']:
+                    signal_emoji = "🟢"
+                    signal_text = "Tín hiệu đảo chiều BUY/LONG"
+                else:
+                    signal_emoji = "🔴"
+                    signal_text = "Tín hiệu đảo chiều SELL/SHORT"
+                
                 message = (
-                    f"🎯 <b>TÍN HIỆU DOJI PHÁT HIỆN!</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"📊 <b>Symbol:</b> {signal['symbol']}\n"
+                    f"👀 <b>PHÁT HIỆN NẾN DOJI</b>\n"
+                    f"━━━━━━━━━━━━━━━━━\n"
+                    f"🔶 <b>Token:</b> {signal['symbol']}\n"
+                    f"{signal_emoji} <b>{signal_text}</b>\n"
                     f"⏰ <b>Khung thời gian:</b> {signal['timeframe']}\n"
-                    f"🕐 <b>Thời gian đóng nến:</b> {signal['close_time']}\n"
-                    f"💰 <b>Giá đóng cửa:</b> ${signal['price']:.4f}\n\n"
-                    f"🎲 <b>Tín hiệu:</b> {signal['signal_type']}"
+                    f"💰 <b>Giá xác nhận:</b> ${signal['price']:.4f}"
                 )
                 
                 try:
