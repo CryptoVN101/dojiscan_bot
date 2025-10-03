@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from sr_calculator import SupportResistanceCalculator
 
 class DojiDetector:
-    def __init__(self, doji_threshold=7, volume_ratio=0.8):
+    def __init__(self, doji_threshold=10, volume_ratio=0.8):
         self.doji_threshold = doji_threshold
         self.volume_ratio = volume_ratio
         self.signal_cache = {}

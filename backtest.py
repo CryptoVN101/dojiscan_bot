@@ -6,13 +6,13 @@ from sr_calculator import SupportResistanceCalculator
 
 # ========== CẤU HÌNH ==========
 # Danh sách các cặp coin cần backtest
-SYMBOLS = ["COWUSDT"]
+SYMBOLS = ["BBUSDT"]
 
 # Khung thời gian
 TIMEFRAMES = ["1h", "4h", "1d"]
 
 # Tham số phát hiện Doji
-DOJI_THRESHOLD_PERCENT = 7  # X% = 7%
+DOJI_THRESHOLD_PERCENT = 10  # X% = 7%
 VOLUME_RATIO_THRESHOLD = 0.8  # Volume <= 80%
 
 # Số nến backtest

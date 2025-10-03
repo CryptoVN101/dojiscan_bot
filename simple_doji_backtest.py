@@ -7,9 +7,9 @@ from datetime import datetime, timezone, timedelta
 from tabulate import tabulate
 
 # ========== CẤU HÌNH ==========
-SYMBOLS = ["COWUSDT"]
+SYMBOLS = ["BBUSDT"]
 TIMEFRAMES = ["1h", "4h", "1d"]
-DOJI_THRESHOLD_PERCENT = 7  # Body <= 7% range
+DOJI_THRESHOLD_PERCENT = 10  # Body <= 7% range
 VOLUME_RATIO_THRESHOLD = 0.8  # Volume <= 80% nến trước
 BACKTEST_CANDLES = 100
 
