@@ -97,6 +97,24 @@ def is_doji_with_low_volume(current_candle, previous_candle, symbol, timeframe, 
     signal_quality = "NORMAL"
     upper_shadow = 0
     upper_shadow_percent = 0
+
+    # Kiểm tra điều kiện cơ bản
+    # BỎ ĐIỀU KIỆN VOLUME CHO KHUNG D
+    if timeframe == "1d":
+        all_conditions = (
+            is_doji and 
+            signal_type is not None
+        )
+    else:
+        all_conditions = (
+            is_doji and 
+            is_low_volume and 
+            signal_type is not None
+        )
+    
+    if not all_conditions:
+        return False, None
+    
     
     if prev_close < prev_open:  # Nến đỏ
         # LONG: High - Close > 60% × Range

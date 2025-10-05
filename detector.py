@@ -121,6 +121,20 @@ class DojiDetector:
         
         # ĐIỀU KIỆN 2: Volume thấp
         is_low_volume = curr_volume <= (self.volume_ratio * prev_volume)
+
+        # Kiểm tra điều kiện cơ bản
+        # BỎ ĐIỀU KIỆN VOLUME CHO KHUNG D
+        if timeframe == "1d":
+            basic_conditions = (
+                is_doji and 
+                signal_type is not None
+        )
+        else:
+            basic_conditions = (
+                is_doji and 
+                is_low_volume and 
+                signal_type is not None
+        )
         
         # ĐIỀU KIỆN 3: Kiểm tra bóng trên của nến trước
         signal_type = None
