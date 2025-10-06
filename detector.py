@@ -44,71 +44,102 @@ class DojiDetector:
             print(f"❌ Lỗi khi lấy dữ liệu {symbol}: {e}")
             return None
     
+    def get_sr_levels(self, symbol, timeframe):
+        """
+        Lấy S/R levels, sử dụng cache để tránh tính toán lại liên tục
+        Cache timeout: 1h cho H1, 4h cho H4, 1d cho D
+        """
+        cache_key = f"{symbol}_{timeframe}"
+        current_time = time.time()
+        
+        # Xác định cache timeout
+        cache_timeout = {
+            "1h": 3600,      # 1 giờ
+            "4h": 14400,     # 4 giờ
+            "1d": 86400      # 1 ngày
+        }
+        
+        timeout = cache_timeout.get(timeframe, 3600)
+        
+        # Kiểm tra cache
+        if cache_key in self.sr_cache and cache_key in self.sr_cache_time:
+            if current_time - self.sr_cache_time[cache_key] < timeout:
+                return self.sr_cache[cache_key]
+        
+        # Tính toán S/R mới
+        sr_data = self.sr_calculator.calculate_sr_levels(symbol, timeframe)
+        
+        # Lưu cache
+        self.sr_cache[cache_key] = sr_data
+        self.sr_cache_time[cache_key] = current_time
+        
+        return sr_data
+    
     def is_doji_with_low_volume(self, current_candle, previous_candle, symbol, timeframe):
         """Kiểm tra nến Doji với điều kiện volume thấp và bóng nến trước"""
-        
+    
         # Thông tin nến hiện tại
         curr_open = current_candle["open"]
         curr_close = current_candle["close"]
         curr_high = current_candle["high"]
         curr_low = current_candle["low"]
         curr_volume = current_candle["volume"]
-        
+    
         # Thông tin nến trước
         prev_open = previous_candle["open"]
         prev_close = previous_candle["close"]
         prev_high = previous_candle["high"]
         prev_low = previous_candle["low"]
         prev_volume = previous_candle["volume"]
-        
+    
         # Tính toán
         curr_body = abs(curr_close - curr_open)
         curr_range = curr_high - curr_low
         prev_range = prev_high - prev_low
-        
+    
         # Tránh chia cho 0
         if curr_range == 0 or prev_range == 0 or prev_volume == 0:
             return False, None
-        
+    
         # ĐIỀU KIỆN 1: Nến Doji
         doji_threshold = (self.doji_threshold / 100) * curr_range
         is_doji = curr_body <= doji_threshold
-        
+    
         if not is_doji:
             return False, None
-        
+    
         # ĐIỀU KIỆN 2: Volume thấp (BỎ QUA CHO KHUNG D)
         is_low_volume = curr_volume <= (self.volume_ratio * prev_volume)
-        
+    
         if timeframe != "1d" and not is_low_volume:
             return False, None
-        
+    
         # ĐIỀU KIỆN 3: Kiểm tra bóng trên của nến trước
         signal_type = None
         upper_shadow = 0
         upper_shadow_percent = 0
-        
+    
         if prev_close < prev_open:  # Nến đỏ
             upper_shadow = prev_high - prev_close
             upper_shadow_percent = (upper_shadow / prev_range) * 100
-            
+        
             if upper_shadow > 0.60 * prev_range:
                 signal_type = "LONG"
-        
+    
         elif prev_close > prev_open:  # Nến xanh
             upper_shadow = prev_high - prev_open
             upper_shadow_percent = (upper_shadow / prev_range) * 100
-            
+        
             if upper_shadow > 0.60 * prev_range:
                 signal_type = "SHORT"
-        
+    
         if signal_type is None:
             return False, None
-        
-        # ĐỦ ĐIỀU KIỆN - TRẢ VỀ LUÔN
+    
+        # ĐỦ ĐIỀU KIỆN - TRẢ VỀ LUÔN (BỎ KIỂM TRA S/R)
         curr_body_percent = (curr_body / curr_range) * 100
         volume_change = ((curr_volume - prev_volume) / prev_volume) * 100
-        
+    
         details = {
             "close": curr_close,
             "close_time": current_candle["close_time"],
@@ -117,7 +148,7 @@ class DojiDetector:
             "upper_shadow_percent": round(upper_shadow_percent, 2),
             "volume_change": round(volume_change, 2)
         }
-        
+    
         return True, details
     
     def timestamp_to_datetime(self, timestamp_ms):
@@ -130,7 +161,7 @@ class DojiDetector:
         """Chuyển timeframe sang text"""
         mapping = {
             "1h": "H1 (1 giờ)",
-            "2h": "H2 (2 giờ)",
+            "2h": "H2 (2 giờ)", 
             "4h": "H4 (4 giờ)",
             "1d": "D1 (1 ngày)"
         }
@@ -141,7 +172,10 @@ class DojiDetector:
         return f"{symbol}_{timeframe}_{close_time}"
     
     async def scan_symbols(self, symbols):
-        """Quét tất cả symbols và trả về danh sách tín hiệu"""
+        """
+        Quét tất cả symbols và trả về danh sách tín hiệu
+        CHỈ TRẢ VỀ TÍN HIỆU HIGH QUALITY (tại vùng S/R)
+        """
         signals = []
         current_time = int(time.time() * 1000)
         
@@ -152,14 +186,11 @@ class DojiDetector:
                 if not candles or len(candles) < 3:
                     continue
                 
-                # Lấy nến vừa đóng (index -2)
                 completed_candle = candles[-2]
                 previous_candle = candles[-3]
                 
-                # TẠO CACHE KEY TRƯỚC
                 cache_key = self.get_cache_key(symbol, timeframe, completed_candle["close_time"])
                 
-                # KIỂM TRA CACHE NGAY - BỎ QUA NẾU ĐÃ GỬI
                 if cache_key in self.signal_cache:
                     continue
                 
@@ -173,13 +204,8 @@ class DojiDetector:
                     "1d": 30 * 60 * 1000
                 }
                 
-                # NẾU QUÁ THỜI GIAN CHO PHÉP - BỎ QUA
                 if time_since_close > max_delay.get(timeframe, 10 * 60 * 1000):
                     continue
-                
-                # QUAN TRỌNG: Chỉ xét nến đã đóng hoàn toàn (> 10 giây)
-                if time_since_close < 10000:  # < 10 giây
-                    continue  # Chưa đóng hoàn toàn, chờ lần quét sau
                 
                 # Kiểm tra điều kiện Doji
                 is_signal, details = self.is_doji_with_low_volume(
@@ -189,8 +215,8 @@ class DojiDetector:
                     timeframe
                 )
                 
-                # NẾU CÓ TÍN HIỆU
-                if is_signal and details:
+                # CHỈ GỬI TÍN HIỆU KHI CÓ S/R (HIGH quality)
+                if is_signal and details and details.get('signal_quality') == 'HIGH':
                     signal = {
                         "symbol": symbol,
                         "timeframe": self.timeframe_to_text(timeframe),
@@ -200,10 +226,7 @@ class DojiDetector:
                     }
                     
                     signals.append(signal)
-                    
-                    # LƯU CACHE NGAY SAU KHI TẠO TÍN HIỆU
                     self.signal_cache[cache_key] = True
-                    print(f"✅ Cached: {symbol} {timeframe} at {self.timestamp_to_datetime(completed_candle['close_time'])}")
                     
                     # Giới hạn cache
                     if len(self.signal_cache) > 1000:
@@ -217,17 +240,17 @@ class DojiDetector:
     def calculate_wait_time(self):
         """Tính thời gian chờ thông minh"""
         from datetime import datetime
-        
+    
         now = datetime.utcnow()
         wait_times = []
-        
+    
         for timeframe in self.timeframes:
             if timeframe == "1h":
                 minutes_left = 60 - now.minute
                 seconds_left = minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-            
-            elif timeframe == "2h":
+        
+            elif timeframe == "2h":  # THÊM
                 current_hour = now.hour
                 next_close_hour = ((current_hour // 2) + 1) * 2
                 if next_close_hour >= 24:
@@ -236,7 +259,7 @@ class DojiDetector:
                 minutes_left = 60 - now.minute if hours_left == 0 else 0
                 seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-            
+        
             elif timeframe == "4h":
                 current_hour = now.hour
                 next_close_hour = ((current_hour // 4) + 1) * 4
@@ -246,15 +269,15 @@ class DojiDetector:
                 minutes_left = 60 - now.minute if hours_left == 0 else 0
                 seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-            
+        
             elif timeframe == "1d":
                 hours_left = 24 - now.hour
                 minutes_left = 60 - now.minute if hours_left == 0 else 0
                 seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-        
+    
         min_wait = min(wait_times)
-        
+    
         if min_wait > 300:
             return 60
         elif min_wait > 120:
