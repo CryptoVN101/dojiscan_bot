@@ -9,7 +9,7 @@ def test_sr_zones():
     """Test S/R zones cho nhiều symbols và timeframes"""
     
     # Symbols để test
-    test_symbols = ["ARBUSDT"]
+    test_symbols = ["LDOUSDT"]
     timeframes = ["1h", "4h", "1d"]
     
     # Khởi tạo calculator
@@ -18,7 +18,7 @@ def test_sr_zones():
         channel_width_pct=5,
         min_strength=1,
         max_num_sr=6,
-        loopback=290
+        loopback=400
     )
     
     print("\n" + "="*80)
