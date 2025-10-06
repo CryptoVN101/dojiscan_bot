@@ -9,7 +9,7 @@ class DojiDetector:
         self.doji_threshold = doji_threshold
         self.volume_ratio = volume_ratio
         self.signal_cache = {}
-        self.timeframes = ["1h", "4h", "1d"]
+        self.timeframes = ["1h", "2h", "4h", "1d"]
         self.sr_calculator = SupportResistanceCalculator()
         self.sr_cache = {}
         self.sr_cache_time = {}
@@ -76,163 +76,79 @@ class DojiDetector:
         return sr_data
     
     def is_doji_with_low_volume(self, current_candle, previous_candle, symbol, timeframe):
-        """
-        Kiểm tra nến Doji với volume thấp và điều kiện bóng nến trước
-        
-        Điều kiện cơ bản:
-        1. Nến hiện tại là Doji: |Close - Open| <= 7% × (High - Low)
-        2. Volume thấp: Volume(Doji) <= 80% × Volume(Previous)
-        3. Nến trước có bóng trên dài:
-           - LONG: High - Close > 60% × (High - Low) & Close < Open (nến đỏ)
-           - SHORT: High - Open > 60% × (High - Low) & Close > Open (nến xanh)
-        
-        Điều kiện nâng cao (bắt buộc để gửi tín hiệu):
-        4. LONG: Nến Doji chạm vùng Support
-        5. SHORT: Nến Doji chạm vùng Resistance
-        """
-        # Thông tin nến hiện tại (Doji)
+        """Kiểm tra nến Doji với điều kiện volume thấp và bóng nến trước"""
+    
+        # Thông tin nến hiện tại
         curr_open = current_candle["open"]
         curr_close = current_candle["close"]
         curr_high = current_candle["high"]
         curr_low = current_candle["low"]
         curr_volume = current_candle["volume"]
-        
+    
         # Thông tin nến trước
         prev_open = previous_candle["open"]
         prev_close = previous_candle["close"]
         prev_high = previous_candle["high"]
         prev_low = previous_candle["low"]
         prev_volume = previous_candle["volume"]
-        
-        # Tính toán nến hiện tại
+    
+        # Tính toán
         curr_body = abs(curr_close - curr_open)
         curr_range = curr_high - curr_low
-        
-        # Tính toán nến trước
         prev_range = prev_high - prev_low
-        
+    
         # Tránh chia cho 0
         if curr_range == 0 or prev_range == 0 or prev_volume == 0:
             return False, None
-        
-        # ĐIỀU KIỆN 1: Nến hiện tại là Doji
+    
+        # ĐIỀU KIỆN 1: Nến Doji
         doji_threshold = (self.doji_threshold / 100) * curr_range
         is_doji = curr_body <= doji_threshold
-        
-        # ĐIỀU KIỆN 2: Volume thấp
+    
+        if not is_doji:
+            return False, None
+    
+        # ĐIỀU KIỆN 2: Volume thấp (BỎ QUA CHO KHUNG D)
         is_low_volume = curr_volume <= (self.volume_ratio * prev_volume)
-
-        # Kiểm tra điều kiện cơ bản
-        # BỎ ĐIỀU KIỆN VOLUME CHO KHUNG D
-        if timeframe == "1d":
-            basic_conditions = (
-                is_doji and 
-                signal_type is not None
-        )
-        else:
-            basic_conditions = (
-                is_doji and 
-                is_low_volume and 
-                signal_type is not None
-        )
-        
+    
+        if timeframe != "1d" and not is_low_volume:
+            return False, None
+    
         # ĐIỀU KIỆN 3: Kiểm tra bóng trên của nến trước
         signal_type = None
+        upper_shadow = 0
         upper_shadow_percent = 0
-        
-        # Tính bóng trên theo từng trường hợp
+    
         if prev_close < prev_open:  # Nến đỏ
-            # LONG: High - Close > 60% × Range
             upper_shadow = prev_high - prev_close
             upper_shadow_percent = (upper_shadow / prev_range) * 100
-            
+        
             if upper_shadow > 0.60 * prev_range:
                 signal_type = "LONG"
-        
+    
         elif prev_close > prev_open:  # Nến xanh
-            # SHORT: High - Open > 60% × Range
             upper_shadow = prev_high - prev_open
             upper_shadow_percent = (upper_shadow / prev_range) * 100
-            
+        
             if upper_shadow > 0.60 * prev_range:
                 signal_type = "SHORT"
-        
-        # Kiểm tra điều kiện cơ bản
-        basic_conditions = (
-            is_doji and 
-            is_low_volume and 
-            signal_type is not None
-        )
-        
-        if not basic_conditions:
+    
+        if signal_type is None:
             return False, None
-        
-        # ĐIỀU KIỆN 4 & 5: Kiểm tra S/R để nâng chất lượng tín hiệu
-        signal_quality = "NORMAL"
-        in_sr_zone = False
-        sr_zone_info = "N/A"
-        
-        try:
-            sr_data = self.get_sr_levels(symbol, timeframe)
-            
-            if signal_type == "LONG":
-                # Kiểm tra nến Doji có chạm vùng Support không
-                if self.sr_calculator.is_candle_touching_zone(
-                    curr_low,
-                    curr_high,
-                    sr_data['support_zones']
-                ):
-                    signal_quality = "HIGH"
-                    in_sr_zone = True
-                    signal_type = "🟢 LONG"
-                    # Tìm zone cụ thể
-                    for low, high in sr_data['support_zones']:
-                        if (low <= curr_low <= high) or \
-                           (low <= curr_high <= high) or \
-                           (curr_low <= low and curr_high >= high):
-                            sr_zone_info = f"Support [${low:.2f}-${high:.2f}]"
-                            break
-            
-            elif signal_type == "SHORT":
-                # Kiểm tra nến Doji có chạm vùng Resistance không
-                if self.sr_calculator.is_candle_touching_zone(
-                    curr_low,
-                    curr_high,
-                    sr_data['resistance_zones']
-                ):
-                    signal_quality = "HIGH"
-                    in_sr_zone = True
-                    signal_type = "🔴 SHORT"
-                    # Tìm zone cụ thể
-                    for low, high in sr_data['resistance_zones']:
-                        if (low <= curr_low <= high) or \
-                           (low <= curr_high <= high) or \
-                           (curr_low <= low and curr_high >= high):
-                            sr_zone_info = f"Resistance [${low:.2f}-${high:.2f}]"
-                            break
-        
-        except Exception as e:
-            print(f"⚠️ Lỗi khi tính S/R cho {symbol}: {e}")
-            # Nếu lỗi S/R, không gửi tín hiệu
-            return False, None
-        
+    
+        # ĐỦ ĐIỀU KIỆN - TRẢ VỀ LUÔN (BỎ KIỂM TRA S/R)
         curr_body_percent = (curr_body / curr_range) * 100
         volume_change = ((curr_volume - prev_volume) / prev_volume) * 100
-        
+    
         details = {
             "close": curr_close,
             "close_time": current_candle["close_time"],
             "signal_type": signal_type,
-            "signal_quality": signal_quality,
             "curr_body_percent": round(curr_body_percent, 2),
             "upper_shadow_percent": round(upper_shadow_percent, 2),
-            "volume_change": round(volume_change, 2),
-            "curr_low": curr_low,
-            "curr_high": curr_high,
-            "in_sr_zone": in_sr_zone,
-            "sr_zone_info": sr_zone_info
+            "volume_change": round(volume_change, 2)
         }
-        
+    
         return True, details
     
     def timestamp_to_datetime(self, timestamp_ms):
@@ -245,6 +161,7 @@ class DojiDetector:
         """Chuyển timeframe sang text"""
         mapping = {
             "1h": "H1 (1 giờ)",
+            "2h": "H2 (2 giờ)", 
             "4h": "H4 (4 giờ)",
             "1d": "D1 (1 ngày)"
         }
@@ -282,6 +199,7 @@ class DojiDetector:
                 
                 max_delay = {
                     "1h": 5 * 60 * 1000,
+                    "2h": 10 * 60 * 1000,
                     "4h": 15 * 60 * 1000,
                     "1d": 30 * 60 * 1000
                 }
@@ -322,16 +240,26 @@ class DojiDetector:
     def calculate_wait_time(self):
         """Tính thời gian chờ thông minh"""
         from datetime import datetime
-        
+    
         now = datetime.utcnow()
         wait_times = []
-        
+    
         for timeframe in self.timeframes:
             if timeframe == "1h":
                 minutes_left = 60 - now.minute
                 seconds_left = minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-            
+        
+            elif timeframe == "2h":  # THÊM
+                current_hour = now.hour
+                next_close_hour = ((current_hour // 2) + 1) * 2
+                if next_close_hour >= 24:
+                    next_close_hour = 0
+                hours_left = (next_close_hour - current_hour) % 24
+                minutes_left = 60 - now.minute if hours_left == 0 else 0
+                seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
+                wait_times.append(max(seconds_left, 10))
+        
             elif timeframe == "4h":
                 current_hour = now.hour
                 next_close_hour = ((current_hour // 4) + 1) * 4
@@ -341,15 +269,15 @@ class DojiDetector:
                 minutes_left = 60 - now.minute if hours_left == 0 else 0
                 seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-            
+        
             elif timeframe == "1d":
                 hours_left = 24 - now.hour
                 minutes_left = 60 - now.minute if hours_left == 0 else 0
                 seconds_left = hours_left * 3600 + minutes_left * 60 - now.second
                 wait_times.append(max(seconds_left, 10))
-        
+    
         min_wait = min(wait_times)
-        
+    
         if min_wait > 300:
             return 60
         elif min_wait > 120:

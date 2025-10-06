@@ -112,7 +112,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ <b>Bot đang hoạt động</b>\n\n"
         f"📊 Số coin đang theo dõi: {len(symbols)}\n"
-        f"⏱️ Khung thời gian: H1, H4, D1\n"
+        f"⏱️ Khung thời gian: H1, H2, H4, D1\n"
         f"🎯 Chế độ: Realtime Detection\n"
         f"📏 Ngưỡng Doji: {detector.doji_threshold}%\n"
         f"📉 Ngưỡng Volume: {detector.volume_ratio * 100}%\n"

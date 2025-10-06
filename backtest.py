@@ -5,8 +5,8 @@ from tabulate import tabulate
 from sr_calculator import SupportResistanceCalculator
 
 # ========== CẤU HÌNH ==========
-SYMBOLS = ["LDOUSDT"]
-TIMEFRAMES = ["1h", "4h", "1d"]
+SYMBOLS = ["DYDXUSDT"]
+TIMEFRAMES = ["1h", "2h", "4h", "1d"]
 DOJI_THRESHOLD_PERCENT = 10
 VOLUME_RATIO_THRESHOLD = 0.8
 BACKTEST_CANDLES = 100
@@ -187,6 +187,7 @@ def timestamp_to_datetime(timestamp_ms):
 def timeframe_to_text(timeframe):
     mapping = {
         "1h": "H1",
+        "2h": "H2",
         "4h": "H4",
         "1d": "D1"
     }
