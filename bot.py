@@ -21,10 +21,10 @@ class SymbolManager:
             try:
                 with open(self.filename, 'r') as f:
                     data = json.load(f)
-                    return data.get('symbols', ["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+                    return data.get('symbols', ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ZROUSDT", "VIRTUALUSDT", "USUALUSDT", "UNIUSDT", "REZUSDT", "LDOUSDT", "KMNOUSDT", "IOUSDT", "GMXUSDT", "ENAUSDT", "EIGENUSDT", "DYDXUSDT", "COWUSDT", "CAKEUSDT", "BERAUSDT", "BBUSDT", "ARBUSDT", "SOLUSDT", "LINKUSDT", "OPUSDT", "APTUSDT", "DOGEUSDT", "WUSDT", "LTCUSDT", "DOTUSDT", "TRXUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "FILUSDT", "VETUSDT", "ICPUSDT", "THETAUSDT", "SANDUSDT", "AXSUSDT", "ALGOUSDT", "EGLDUSDT", "AAVEUSDT", "FTMUSDT", "NEARUSDT", "GRTUSDT"])
             except:
                 pass
-        return ["BTCUSDT", "ETHUSDT", "BNBUSDT"]  # Default symbols
+        return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ZROUSDT", "VIRTUALUSDT", "USUALUSDT", "UNIUSDT", "REZUSDT", "LDOUSDT", "KMNOUSDT", "IOUSDT", "GMXUSDT", "ENAUSDT", "EIGENUSDT", "DYDXUSDT", "COWUSDT", "CAKEUSDT", "BERAUSDT", "BBUSDT", "ARBUSDT", "SOLUSDT", "LINKUSDT", "OPUSDT", "APTUSDT", "DOGEUSDT", "WUSDT", "LTCUSDT", "DOTUSDT", "TRXUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "FILUSDT", "VETUSDT", "ICPUSDT", "THETAUSDT", "SANDUSDT", "AXSUSDT", "ALGOUSDT", "EGLDUSDT", "AAVEUSDT", "FTMUSDT", "NEARUSDT", "GRTUSDT"]  # Default symbols
     
     def save_symbols(self):
         """Lưu danh sách symbols vào file"""
@@ -112,7 +112,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ <b>Bot đang hoạt động</b>\n\n"
         f"📊 Số coin đang theo dõi: {len(symbols)}\n"
-        f"⏱️ Khung thời gian: H1, H4, D1\n"
+        f"⏱️ Khung thời gian: H1, H2, H4, D1\n"
         f"🎯 Chế độ: Realtime Detection\n"
         f"📏 Ngưỡng Doji: {detector.doji_threshold}%\n"
         f"📉 Ngưỡng Volume: {detector.volume_ratio * 100}%\n"
