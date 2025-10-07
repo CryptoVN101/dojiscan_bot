@@ -1,27 +1,23 @@
 """
-Backtest đơn giản: Chỉ kiểm tra nến Doji với volume thấp
-Không có điều kiện S/R, chỉ xác định xem đó có phải nến Doji không
+Backtest đơn giản: Chỉ Doji cơ bản
+KHÔNG có điều kiện True Doji, KHÔNG có điều kiện nến trước
+Chỉ để so sánh xem có bao nhiêu nến bị lọc bởi logic mới
 """
 import requests
 from datetime import datetime, timezone, timedelta
 from tabulate import tabulate
 
 # ========== CẤU HÌNH ==========
-SYMBOLS = ["DYDXUSDT"]
-TIMEFRAMES = ["1h", "4h", "1d"]
-DOJI_THRESHOLD_PERCENT = 10  # Body <= 7% range
-VOLUME_RATIO_THRESHOLD = 0.8  # Volume <= 80% nến trước
+SYMBOLS = ["GRTUSDT"]
+TIMEFRAMES = ["1h", "2h", "4h", "1d"]
+DOJI_THRESHOLD_PERCENT = 10
+VOLUME_RATIO_THRESHOLD = 0.9  # CẬP NHẬT: 80% → 90%
 BACKTEST_CANDLES = 100
 
-# ========== HÀM LẤY DỮ LIỆU ==========
+# ========== LẤY DỮ LIỆU ==========
 def get_historical_klines(symbol, interval, limit=100):
-    """Lấy dữ liệu từ Binance"""
     url = "https://api.binance.com/api/v3/klines"
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "limit": limit
-    }
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
     
     try:
         response = requests.get(url, params=params, timeout=10)
@@ -31,7 +27,6 @@ def get_historical_klines(symbol, interval, limit=100):
         candles = []
         for candle in data:
             candles.append({
-                "open_time": candle[0],
                 "open": float(candle[1]),
                 "high": float(candle[2]),
                 "low": float(candle[3]),
@@ -41,242 +36,108 @@ def get_historical_klines(symbol, interval, limit=100):
             })
         return candles
     except Exception as e:
-        print(f"Lỗi khi lấy dữ liệu {symbol}: {e}")
+        print(f"Lỗi: {e}")
         return None
 
-# ========== HÀM KIỂM TRA DOJI ==========
-def is_doji_simple(current_candle, previous_candle, threshold_percent=7, volume_ratio=0.8):
-    """
-    Kiểm tra nến Doji đơn giản
+# ========== KIỂM TRA DOJI ĐƠN GIẢN ==========
+def is_simple_doji(current, previous, timeframe):
+    curr_body = abs(current["close"] - current["open"])
+    curr_range = current["high"] - current["low"]
     
-    Chỉ 2 điều kiện:
-    1. Body <= 7% × Range
-    2. Volume <= 80% × Volume nến trước
-    
-    Returns:
-        (is_doji, details)
-    """
-    curr_open = current_candle["open"]
-    curr_close = current_candle["close"]
-    curr_high = current_candle["high"]
-    curr_low = current_candle["low"]
-    curr_volume = current_candle["volume"]
-    
-    prev_volume = previous_candle["volume"]
-    
-    # Tính toán
-    curr_body = abs(curr_close - curr_open)
-    curr_range = curr_high - curr_low
-    
-    # Tránh chia cho 0
-    if curr_range == 0 or prev_volume == 0:
+    if curr_range == 0 or previous["volume"] == 0:
         return False, None
     
-    # Điều kiện 1: Doji
-    doji_threshold = (threshold_percent / 100) * curr_range
-    is_doji = curr_body <= doji_threshold
+    # Doji: Body ≤ 10%
+    if curr_body > (DOJI_THRESHOLD_PERCENT / 100) * curr_range:
+        return False, None
     
-    # Điều kiện 2: Volume thấp
-    is_low_volume = curr_volume <= (volume_ratio * prev_volume)
+    # Volume thấp (bỏ qua khung 1d)
+    if timeframe != "1d":
+        if current["volume"] > (VOLUME_RATIO_THRESHOLD * previous["volume"]):
+            return False, None
     
-    # Phân loại màu nến
-    if curr_close > curr_open:
-        candle_color = "Xanh"
-    elif curr_close < curr_open:
-        candle_color = "Đỏ"
-    else:
-        candle_color = "Flat"
+    body_pct = (curr_body / curr_range) * 100
+    vol_change = ((current["volume"] - previous["volume"]) / previous["volume"]) * 100
     
-    curr_body_percent = (curr_body / curr_range) * 100
-    volume_change_percent = ((curr_volume - prev_volume) / prev_volume) * 100
-    
-    # Tính upper và lower shadow
-    if curr_close > curr_open:  # Nến xanh
-        upper_shadow = curr_high - curr_close
-        lower_shadow = curr_open - curr_low
-    else:  # Nến đỏ
-        upper_shadow = curr_high - curr_open
-        lower_shadow = curr_close - curr_low
-    
-    upper_shadow_percent = (upper_shadow / curr_range * 100) if curr_range > 0 else 0
-    lower_shadow_percent = (lower_shadow / curr_range * 100) if curr_range > 0 else 0
+    # Tính bóng
+    body_top = max(current["open"], current["close"])
+    body_bottom = min(current["open"], current["close"])
+    upper = current["high"] - body_top
+    lower = body_bottom - current["low"]
     
     details = {
-        "open": curr_open,
-        "high": curr_high,
-        "low": curr_low,
-        "close": curr_close,
-        "body": curr_body,
-        "range": curr_range,
-        "body_percent": round(curr_body_percent, 2),
-        "volume": curr_volume,
-        "prev_volume": prev_volume,
-        "volume_change_percent": round(volume_change_percent, 2),
-        "candle_color": candle_color,
-        "upper_shadow": upper_shadow,
-        "lower_shadow": lower_shadow,
-        "upper_shadow_percent": round(upper_shadow_percent, 2),
-        "lower_shadow_percent": round(lower_shadow_percent, 2),
-        "is_doji": is_doji,
-        "is_low_volume": is_low_volume
+        "close": current["close"],
+        "body_percent": round(body_pct, 2),
+        "upper_shadow_percent": round((upper / curr_range) * 100, 2),
+        "lower_shadow_percent": round((lower / curr_range) * 100, 2),
+        "volume_change": round(vol_change, 2)
     }
     
-    # Cả 2 điều kiện phải thỏa
-    return (is_doji and is_low_volume), details
+    return True, details
 
-# ========== CHUYỂN ĐỔI THỜI GIAN ==========
-def timestamp_to_datetime(timestamp_ms):
-    dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
-    dt_vietnam = dt + timedelta(hours=7)
-    return dt_vietnam.strftime("%d/%m/%Y %H:%M")
+# ========== UTILS ==========
+def timestamp_to_datetime(ts_ms):
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc) + timedelta(hours=7)
+    return dt.strftime("%d/%m/%Y %H:%M")
 
-def timeframe_to_text(timeframe):
-    mapping = {"1h": "H1", "4h": "H4", "1d": "D1"}
-    return mapping.get(timeframe, timeframe)
+def tf_text(tf):
+    return {"1h": "H1", "2h": "H2", "4h": "H4", "1d": "D1"}.get(tf, tf)
 
 # ========== BACKTEST ==========
-def backtest_symbol(symbol, timeframe, num_candles=100):
-    print(f"\n{'='*70}")
-    print(f"Backtest: {symbol} - {timeframe_to_text(timeframe)}")
-    print(f"{'='*70}")
-    
+def backtest(symbol, timeframe, num_candles=100):
     candles = get_historical_klines(symbol, timeframe, limit=num_candles + 1)
-    
     if not candles or len(candles) < 2:
-        print("Không đủ dữ liệu")
         return []
     
-    doji_signals = []
-    
+    signals = []
     for i in range(1, len(candles)):
-        previous = candles[i-1]
-        current = candles[i]
-        
-        is_doji, details = is_doji_simple(
-            current,
-            previous,
-            threshold_percent=DOJI_THRESHOLD_PERCENT,
-            volume_ratio=VOLUME_RATIO_THRESHOLD
-        )
-        
-        if is_doji and details:
-            signal = {
+        is_doji, details = is_simple_doji(candles[i], candles[i-1], timeframe)
+        if is_doji:
+            signals.append({
                 "symbol": symbol,
-                "timeframe": timeframe_to_text(timeframe),
-                "close_time": timestamp_to_datetime(current["close_time"]),
-                "open": details["open"],
-                "high": details["high"],
-                "low": details["low"],
-                "close": details["close"],
-                "body_percent": details["body_percent"],
-                "volume_change": details["volume_change_percent"],
-                "candle_color": details["candle_color"],
-                "upper_shadow_percent": details["upper_shadow_percent"],
-                "lower_shadow_percent": details["lower_shadow_percent"]
-            }
-            doji_signals.append(signal)
-    
-    if doji_signals:
-        print(f"\nTìm thấy {len(doji_signals)} nến Doji:\n")
-        
-        table_data = []
-        for idx, sig in enumerate(doji_signals, 1):
-            table_data.append([
-                idx,
-                sig["close_time"],
-                f"${sig['close']:.4f}",
-                sig["candle_color"],
-                f"{sig['body_percent']:.2f}%",
-                f"{sig['upper_shadow_percent']:.2f}%",
-                f"{sig['lower_shadow_percent']:.2f}%",
-                f"{sig['volume_change']:.2f}%"
-            ])
-        
-        headers = ["#", "Thời gian", "Giá", "Màu", "Body%", "Bóng Trên%", "Bóng Dưới%", "Vol Change"]
-        print(tabulate(table_data, headers=headers, tablefmt="grid"))
-        
-        # Chi tiết 3 nến đầu
-        print(f"\nChi tiết 3 nến Doji đầu tiên:\n")
-        for idx, sig in enumerate(doji_signals[:3], 1):
-            print(f"Nến Doji #{idx} - {sig['candle_color']}")
-            print(f"  Thời gian: {sig['close_time']}")
-            print(f"  OHLC: O=${sig['open']:.4f}, H=${sig['high']:.4f}, L=${sig['low']:.4f}, C=${sig['close']:.4f}")
-            print(f"  Body: {sig['body_percent']:.2f}% (của range)")
-            print(f"  Bóng trên: {sig['upper_shadow_percent']:.2f}%")
-            print(f"  Bóng dưới: {sig['lower_shadow_percent']:.2f}%")
-            print(f"  Volume: {sig['volume_change']:.2f}%")
-            print()
-    else:
-        print("\nKhông tìm thấy nến Doji nào")
-    
-    return doji_signals
+                "timeframe": tf_text(timeframe),
+                "time": timestamp_to_datetime(candles[i]["close_time"]),
+                "price": details["close"],
+                "body": details["body_percent"],
+                "upper": details["upper_shadow_percent"],
+                "lower": details["lower_shadow_percent"],
+                "vol": details["volume_change"]
+            })
+    return signals
 
 # ========== MAIN ==========
-def run_backtest():
-    print("\n" + "="*70)
-    print("BACKTEST NẾN DOJI ĐƠN GIẢN")
-    print("="*70)
-    print(f"\nCấu hình:")
-    print(f"  Symbols: {', '.join(SYMBOLS)}")
-    print(f"  Timeframes: {', '.join([timeframe_to_text(tf) for tf in TIMEFRAMES])}")
-    print(f"  Số nến: {BACKTEST_CANDLES}")
-    print(f"  Điều kiện Doji: Body <= {DOJI_THRESHOLD_PERCENT}% range")
-    print(f"  Điều kiện Volume: <= {VOLUME_RATIO_THRESHOLD * 100}% nến trước")
+def run():
+    print("\n" + "="*80)
+    print("BACKTEST ĐƠN GIẢN - CHỈ BODY + VOLUME (KHÔNG KIỂM TRA THÂN Ở GIỮA)")
+    print("="*80)
+    print(f"\n📊 Config: {', '.join(SYMBOLS)}")
+    print(f"   Điều kiện: Body ≤ {DOJI_THRESHOLD_PERCENT}%, Volume ≤ {VOLUME_RATIO_THRESHOLD*100}%\n")
     
     all_signals = []
-    
     for symbol in SYMBOLS:
-        for timeframe in TIMEFRAMES:
-            signals = backtest_symbol(symbol, timeframe, BACKTEST_CANDLES)
-            all_signals.extend(signals)
-    
-    # Tổng kết
-    print("\n" + "="*70)
-    print("TỔNG KẾT")
-    print("="*70)
+        for tf in TIMEFRAMES:
+            all_signals.extend(backtest(symbol, tf, BACKTEST_CANDLES))
     
     if not all_signals:
-        print("\nKhông tìm thấy nến Doji nào!")
+        print("❌ Không tìm thấy nến Doji nào!")
         return
     
-    print(f"\nTổng số nến Doji tìm thấy: {len(all_signals)}")
+    print(f"✅ Tìm thấy {len(all_signals)} nến Doji (bao gồm cả Pinbar/Hammer):\n")
     
-    # Thống kê theo timeframe
-    print(f"\nPhân bố theo timeframe:")
-    for tf in TIMEFRAMES:
-        tf_text = timeframe_to_text(tf)
-        count = len([s for s in all_signals if s["timeframe"] == tf_text])
-        print(f"  {tf_text}: {count} nến")
+    table = []
+    for idx, sig in enumerate(all_signals, 1):
+        table.append([
+            idx, sig["symbol"], sig["timeframe"], sig["time"],
+            f"${sig['price']:.4f}", f"{sig['body']:.1f}%",
+            f"{sig['upper']:.1f}%", f"{sig['lower']:.1f}%", f"{sig['vol']:.1f}%"
+        ])
     
-    # Thống kê theo symbol
-    print(f"\nPhân bố theo symbol:")
-    for symbol in SYMBOLS:
-        count = len([s for s in all_signals if s["symbol"] == symbol])
-        print(f"  {symbol}: {count} nến")
-    
-    # Thống kê theo màu
-    print(f"\nPhân bố theo màu nến:")
-    green_count = len([s for s in all_signals if s["candle_color"] == "Xanh"])
-    red_count = len([s for s in all_signals if s["candle_color"] == "Đỏ"])
-    flat_count = len([s for s in all_signals if s["candle_color"] == "Flat"])
-    
-    print(f"  Xanh: {green_count} nến")
-    print(f"  Đỏ: {red_count} nến")
-    print(f"  Flat: {flat_count} nến")
-    
-    print("\n" + "="*70)
-    print("Để verify:")
-    print("  1. Mở TradingView")
-    print("  2. Kiểm tra từng nến có body nhỏ và volume thấp không")
-    print("  3. Xác nhận đó có phải nến Doji không")
-    print("="*70)
+    headers = ["#", "Symbol", "TF", "Time", "Price", "Body%", "Upper%", "Lower%", "Vol%"]
+    print(tabulate(table, headers=headers, tablefmt="grid"))
+    print("\n💡 Lưu ý: Backtest này KHÔNG lọc thân nến ở giữa → có thể chứa Pinbar/Hammer")
 
 if __name__ == "__main__":
     try:
-        run_backtest()
+        run()
     except KeyboardInterrupt:
         print("\n\nĐã dừng!")
-    except Exception as e:
-        print(f"\n\nLỗi: {e}")
-        import traceback
-        traceback.print_exc()

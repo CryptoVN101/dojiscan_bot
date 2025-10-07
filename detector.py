@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from sr_calculator import SupportResistanceCalculator
 
 class DojiDetector:
-    def __init__(self, doji_threshold=10, volume_ratio=0.8):
+    def __init__(self, doji_threshold=10, volume_ratio=0.9):
         self.doji_threshold = doji_threshold
         self.volume_ratio = volume_ratio
         self.signal_cache = {}
@@ -13,6 +13,15 @@ class DojiDetector:
         self.sr_calculator = SupportResistanceCalculator()
         self.sr_cache = {}
         self.sr_cache_time = {}
+        
+        # Tham số cho True Doji
+        self.min_body_position = 35  # Thân nến tối thiểu 35% từ Low
+        self.max_body_position = 65  # Thân nến tối đa 65% từ Low
+        self.min_shadow_percent = 5  # Mỗi bóng tối thiểu 5%
+        
+        # Tham số cho nến trước (CẢI TIẾN)
+        self.prev_shadow_threshold = 65  # Bóng trên ≥ 65%
+        self.prev_body_threshold = 70    # Body ≥ 70% (MỚI!)
     
     def get_klines(self, symbol, interval, limit=3):
         """Lấy dữ liệu nến từ Binance API"""
@@ -44,10 +53,64 @@ class DojiDetector:
             print(f"❌ Lỗi khi lấy dữ liệu {symbol}: {e}")
             return None
     
-    def is_doji_with_low_volume(self, current_candle, previous_candle, symbol, timeframe):
-        """Kiểm tra nến Doji với điều kiện volume thấp và bóng nến trước"""
+    def is_true_doji(self, candle):
+        """
+        Kiểm tra nến có THỰC SỰ là Doji không (tránh nhầm với Pinbar/Hammer)
         
-        # Thông tin nến hiện tại
+        Điều kiện:
+        1. Body nhỏ (≤ 10% range)
+        2. Thân nến ở giữa (35-65% từ Low)
+        3. Cả 2 bóng đều tồn tại (mỗi bóng ≥ 5%)
+        """
+        open_price = candle["open"]
+        close_price = candle["close"]
+        high_price = candle["high"]
+        low_price = candle["low"]
+        
+        price_range = high_price - low_price
+        
+        if price_range == 0:
+            return False
+        
+        # Điều kiện 1: Body nhỏ
+        body = abs(close_price - open_price)
+        body_percent = (body / price_range) * 100
+        
+        if body_percent > self.doji_threshold:
+            return False
+        
+        # Điều kiện 2: Thân nến ở giữa (35-65%)
+        body_top = max(open_price, close_price)
+        body_bottom = min(open_price, close_price)
+        
+        # Tính vị trí thân nến từ Low
+        body_position_from_low = ((body_bottom - low_price) / price_range) * 100
+        
+        if body_position_from_low < self.min_body_position or body_position_from_low > self.max_body_position:
+            return False
+        
+        # Điều kiện 3: Cả 2 bóng phải tồn tại
+        upper_shadow = high_price - body_top
+        lower_shadow = body_bottom - low_price
+        
+        upper_shadow_pct = (upper_shadow / price_range) * 100
+        lower_shadow_pct = (lower_shadow / price_range) * 100
+        
+        if upper_shadow_pct < self.min_shadow_percent or lower_shadow_pct < self.min_shadow_percent:
+            return False
+        
+        return True
+    
+    def is_doji_with_low_volume(self, current_candle, previous_candle, symbol, timeframe):
+        """
+        Kiểm tra nến Doji với điều kiện chính xác:
+        1. True Doji (body nhỏ, ở giữa, có cả 2 bóng)
+        2. Volume(Doji) ≤ 90% × Volume(Previous) [bỏ qua khung 1d]
+        3a. Nến trước ĐỎ: High - Close > 65% VÀ Body ≥ 70% → LONG
+        3b. Nến trước XANH: High - Open > 65% VÀ Body ≥ 70% → SHORT
+        """
+        
+        # Thông tin nến hiện tại (Doji)
         curr_open = current_candle["open"]
         curr_close = current_candle["close"]
         curr_high = current_candle["high"]
@@ -70,42 +133,55 @@ class DojiDetector:
         if curr_range == 0 or prev_range == 0 or prev_volume == 0:
             return False, None
         
-        # ĐIỀU KIỆN 1: Nến Doji
-        doji_threshold = (self.doji_threshold / 100) * curr_range
-        is_doji = curr_body <= doji_threshold
-        
-        if not is_doji:
+        # ============ ĐIỀU KIỆN 1: True Doji (cải tiến) ============
+        if not self.is_true_doji(current_candle):
             return False, None
         
-        # ĐIỀU KIỆN 2: Volume thấp (BỎ QUA CHO KHUNG D)
-        is_low_volume = curr_volume <= (self.volume_ratio * prev_volume)
+        # ============ ĐIỀU KIỆN 2: Volume thấp ============
+        # Bỏ qua cho khung 1d
+        if timeframe != "1d":
+            is_low_volume = curr_volume <= (self.volume_ratio * prev_volume)
+            if not is_low_volume:
+                return False, None
         
-        if timeframe != "1d" and not is_low_volume:
-            return False, None
-        
-        # ĐIỀU KIỆN 3: Kiểm tra bóng trên của nến trước
+        # ============ ĐIỀU KIỆN 3: Nến trước (CẢI TIẾN) ============
         signal_type = None
         upper_shadow = 0
         upper_shadow_percent = 0
         
-        if prev_close < prev_open:  # Nến đỏ
+        # Ngưỡng mới
+        shadow_threshold = self.prev_shadow_threshold / 100
+        body_threshold = self.prev_body_threshold / 100
+        
+        # Tính body nến trước
+        prev_body = abs(prev_close - prev_open)
+        prev_body_percent = (prev_body / prev_range) * 100
+        
+        # Kiểm tra nến trước là đỏ hay xanh
+        if prev_close < prev_open:  # NẾN ĐỎ
+            # Công thức: High - Close > 65% × (High - Low)
             upper_shadow = prev_high - prev_close
             upper_shadow_percent = (upper_shadow / prev_range) * 100
             
-            if upper_shadow > 0.60 * prev_range:
+            # THÊM: Kiểm tra body ≥ 70%
+            if upper_shadow > shadow_threshold * prev_range and \
+               prev_body >= body_threshold * prev_range:
                 signal_type = "LONG"
         
-        elif prev_close > prev_open:  # Nến xanh
+        elif prev_close > prev_open:  # NẾN XANH
+            # Công thức: High - Open > 65% × (High - Low)
             upper_shadow = prev_high - prev_open
             upper_shadow_percent = (upper_shadow / prev_range) * 100
             
-            if upper_shadow > 0.60 * prev_range:
+            # THÊM: Kiểm tra body ≥ 70%
+            if upper_shadow > shadow_threshold * prev_range and \
+               prev_body >= body_threshold * prev_range:
                 signal_type = "SHORT"
         
         if signal_type is None:
             return False, None
         
-        # ĐỦ ĐIỀU KIỆN - TRẢ VỀ LUÔN
+        # ============ TRẢ VỀ KẾT QUẢ ============
         curr_body_percent = (curr_body / curr_range) * 100
         volume_change = ((curr_volume - prev_volume) / prev_volume) * 100
         
@@ -115,6 +191,7 @@ class DojiDetector:
             "signal_type": signal_type,
             "curr_body_percent": round(curr_body_percent, 2),
             "upper_shadow_percent": round(upper_shadow_percent, 2),
+            "prev_body_percent": round(prev_body_percent, 2),
             "volume_change": round(volume_change, 2)
         }
         
@@ -189,7 +266,7 @@ class DojiDetector:
                     timeframe
                 )
                 
-                # NẾU CÓ TÍN HIỆU (BỎ CHECK SIGNAL_QUALITY)
+                # NẾU CÓ TÍN HIỆU
                 if is_signal and details:
                     signal = {
                         "symbol": symbol,
@@ -203,7 +280,8 @@ class DojiDetector:
                     
                     # LƯU CACHE NGAY SAU KHI TẠO TÍN HIỆU
                     self.signal_cache[cache_key] = True
-                    print(f"✅ Cached: {symbol} {timeframe} at {self.timestamp_to_datetime(completed_candle['close_time'])}")
+                    print(f"✅ Signal: {symbol} {timeframe} {details['signal_type']} @ ${details['close']:.4f} "
+                          f"(Prev body: {details['prev_body_percent']:.1f}%)")
                     
                     # Giới hạn cache
                     if len(self.signal_cache) > 1000:
