@@ -207,20 +207,11 @@ async def run_scanner(context: ContextTypes.DEFAULT_TYPE):
             signals = await detector.scan_symbols(symbols)
             
             # Gửi tín hiệu lên channel
-            for signal in signals:
-                # Xác định emoji và text cho tín hiệu
-                if "LONG" in signal['signal_type']:
-                    signal_emoji = "🟢"
-                    signal_text = "Tín hiệu đảo chiều BUY/LONG"
-                else:
-                    signal_emoji = "🔴"
-                    signal_text = "Tín hiệu đảo chiều SELL/SHORT"
-                
+            for signal in signals: 
                 message = (
                     f"👀 <b>PHÁT HIỆN NẾN DOJI</b>\n"
-                    f"━━━━━━━━━━━━━━━━━\n"
+                    f"━━━━━━━━━━━━━━━\n"
                     f"🔶 <b>Token:</b> {signal['symbol']}\n"
-                    f"{signal_emoji} <b>{signal_text}</b>\n"
                     f"⏰ <b>Khung thời gian:</b> {signal['timeframe']}\n"
                     f"💰 <b>Giá xác nhận:</b> ${signal['price']:.4f}"
                 )
