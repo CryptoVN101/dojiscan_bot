@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from tabulate import tabulate
 
 # ========== CẤU HÌNH ==========
-SYMBOLS = ["GRTUSDT"]
+SYMBOLS = ["BTCUSDT"]
 TIMEFRAMES = ["1h", "2h", "4h", "1d"]
 DOJI_THRESHOLD_PERCENT = 10
 VOLUME_RATIO_THRESHOLD = 0.9
@@ -102,7 +102,7 @@ def is_true_doji(candle):
     return True
 
 # ========== KIỂM TRA NẾN TRƯỚC ==========
-PREV_BODY_THRESHOLD = 70  # Body nến trước ≥ 70%
+PREV_BODY_THRESHOLD = 65  # Body nến trước ≥ 70%
 
 def check_previous_candle(previous_candle):
     """

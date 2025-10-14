@@ -21,7 +21,7 @@ class DojiDetector:
         
         # Tham số cho nến trước (CẢI TIẾN)
         self.prev_shadow_threshold = 65  # Bóng trên ≥ 65%
-        self.prev_body_threshold = 70    # Body ≥ 70% (MỚI!)
+        self.prev_body_threshold = 65    # Body ≥ 70% (MỚI!)
     
     def get_klines(self, symbol, interval, limit=3):
         """Lấy dữ liệu nến từ Binance API"""

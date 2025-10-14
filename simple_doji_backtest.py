@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from tabulate import tabulate
 
 # ========== CẤU HÌNH ==========
-SYMBOLS = ["GRTUSDT"]
+SYMBOLS = ["WUSDT"]
 TIMEFRAMES = ["1h", "2h", "4h", "1d"]
 DOJI_THRESHOLD_PERCENT = 10
 VOLUME_RATIO_THRESHOLD = 0.9  # CẬP NHẬT: 80% → 90%
